@@ -1,18 +1,29 @@
-﻿using UnityEngine;
+﻿using System.Collections.Generic;
+using UnityEngine;
 
 [RequireComponent(typeof(AudioSource))]
 public class SquareWaveGenerator : MonoBehaviour
 {
-    [SerializeField] private float frequency = 440f;          // Frequency of the square wave in Hz
+    //[SerializeField] private float frequency = 440f;          // Frequency of the square wave in Hz
     [SerializeField] private int sampleRate = 48000;          // Sample rate (samples per second)
     [SerializeField] private float decay = .3f;               // Duration of the fade-out in seconds
     [SerializeField] private int octave = 0;
 
-    private float phase;                    // Tracks the phase of the square wave
-    private float amplitude = 1.0f;         // Amplitude of the wave (for fade-out)
-    private bool isPlaying = false;         // Tracks if the sound should be playing
+    private class Note
+    {
+        public float Frequency { get; }
+        public float Amplitude { get; set; }
+        public float Phase { get; set; }
+        public float FadeElapsed { get; set; }
+        public Note(float frequency)
+        {
+            Frequency = frequency;
+            Amplitude = 1f;
+            FadeElapsed = 0f;
+        }
+    }
 
-    private float fadeElapsed = 0f;         // Tracks the elapsed time for fading
+    private List<Note> activeNotes = new();
 
     private void Update()
     {
@@ -22,24 +33,25 @@ public class SquareWaveGenerator : MonoBehaviour
             {
                 if (Input.GetKey(keyCode))
                 {
-                    isPlaying = true;
-                    fadeElapsed = 0f;
-                    amplitude = 1.0f;
-                    frequency = Mathf.Pow(2, octave) * (Frequencies.Keys.ContainsKey(keyCode) ? Frequencies.Keys[keyCode] : Frequencies.tuning);
+                    float frequency = Mathf.Pow(2, octave) * (Frequencies.Keys.ContainsKey(keyCode) ? Frequencies.Keys[keyCode] : Frequencies.tuning);
+                    if (activeNotes.Exists(x => x.Frequency == frequency))
+                        activeNotes.Find(x => x.Frequency == frequency).FadeElapsed = 0f;
+                    else
+                        activeNotes.Add(new(frequency));
                 }
             }
         }
 
         // If playing, increment the fade elapsed time
-        if (isPlaying)
+        for (int i = 0; i < activeNotes.Count; i++)
         {
-            fadeElapsed += Time.deltaTime;
+            activeNotes[i].FadeElapsed += Time.deltaTime;
 
             // Once the fade duration is over, stop playing
-            if (fadeElapsed >= decay)
+            if (activeNotes[i].FadeElapsed >= decay)
             {
-                fadeElapsed = decay;
-                isPlaying = false;
+                activeNotes.Remove(activeNotes[i]);
+                i--;
             }
         }
     }
@@ -48,20 +60,25 @@ public class SquareWaveGenerator : MonoBehaviour
 
     private void OnAudioFilterRead(float[] data, int channels)
     {
-        float increment = frequency * 2f * Mathf.PI / sampleRate;
-        int maxHarmonics = Mathf.FloorToInt(sampleRate / (2 * frequency)); // Number of harmonics to include
+        foreach (var note in activeNotes)
+            GenerateWave(data, channels, note);
+    }
 
+    private void GenerateWave(float[] data, int channels, Note note)
+    {
+        int maxHarmonics = Mathf.FloorToInt(sampleRate / (2 * note.Frequency)); // Number of harmonics to include
+        float increment = note.Frequency * 2f * Mathf.PI / sampleRate;
         for (int i = 0; i < data.Length; i += channels)
         {
-            if (!isPlaying)
-            {
-                // Fill buffer with silence if not playing
-                for (int channel = 0; channel < channels; channel++)
-                {
-                    data[i + channel] = 0f;
-                }
-                continue;
-            }
+            //if (!isPlaying)
+            //{
+            //    // Fill buffer with silence if not playing
+            //    for (int channel = 0; channel < channels; channel++)
+            //    {
+            //        data[i + channel] = 0f;
+            //    }
+            //    continue;
+            //}
 
             // Reset the sample value
             float sample = 0f;
@@ -69,24 +86,24 @@ public class SquareWaveGenerator : MonoBehaviour
             // Generate the square wave using a limited number of harmonics
             for (int n = 1; n <= maxHarmonics; n += 2)
             {
-                sample += (1f / n) * Mathf.Sin(n * phase);
+                sample += (1f / n) * Mathf.Sin(n * note.Phase);
             }
 
             // Scale the sample by the amplitude and the factor for square wave
-            amplitude = 1f - fadeElapsed / decay;
-            sample *= amplitude * (4f / Mathf.PI);
+            note.Amplitude = 1f - note.FadeElapsed / decay;
+            sample *= 0.2f * note.Amplitude * (4f / Mathf.PI);
 
             // Apply the sample to all channels
             for (int channel = 0; channel < channels; channel++)
             {
-                data[i + channel] = sample;
+                data[i + channel] += sample;
             }
 
             // Increment the phase and wrap around to keep it in the range [0, 2π]
-            phase += increment;
-            if (phase > 2f * Mathf.PI)
+            note.Phase += increment;
+            if (note.Phase > 2f * Mathf.PI)
             {
-                phase -= 2f * Mathf.PI;
+                note.Phase -= 2f * Mathf.PI;
             }
         }
     }

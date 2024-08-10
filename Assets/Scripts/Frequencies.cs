@@ -34,13 +34,13 @@ public static class Frequencies
     public static float Cs4 => tuning * Mathf.Pow(1.0594631f, 4);
     public static float D4  => tuning * Mathf.Pow(1.0594631f, 5);
     public static float Ds4 => tuning * Mathf.Pow(1.0594631f, 6);
-    public static float E4  => tuning * Mathf.Pow(1.0594631f, 7);
+    public static float E4 =>  tuning * Mathf.Pow(1.0594631f, 7);
     public static float F4  => tuning * Mathf.Pow(1.0594631f, 8);
     public static float Fs4 => tuning * Mathf.Pow(1.0594631f, 9);
-    public static float G4  => tuning * Mathf.Pow(1.0594631f, 10);
+    public static float G4 =>  tuning * Mathf.Pow(1.0594631f, 10);
     public static float Gs4 => tuning * Mathf.Pow(1.0594631f, 11);
     public static float A5  => tuning * Mathf.Pow(1.0594631f, 12);
-    public static float As5  => tuning * Mathf.Pow(1.0594631f, 13);
+    public static float As5 => tuning * Mathf.Pow(1.0594631f, 13);
     public static float B5  => tuning * Mathf.Pow(1.0594631f, 14);
     public static float C5  => tuning * Mathf.Pow(1.0594631f, 15);
     public static float Cs5  => tuning * Mathf.Pow(1.0594631f, 16);
