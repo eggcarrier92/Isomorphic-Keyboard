@@ -2,12 +2,31 @@
 using UnityEngine;
 
 [RequireComponent(typeof(AudioSource))]
-public class SquareWaveGenerator : MonoBehaviour
+public class WaveGenerator : MonoBehaviour
 {
     //[SerializeField] private float frequency = 440f;          // Frequency of the square wave in Hz
     [SerializeField] private int sampleRate = 48000;          // Sample rate (samples per second)
     [SerializeField] private float decay = .3f;               // Duration of the fade-out in seconds
     [SerializeField] private int octave = 0;
+
+    public void StartPlaying(float frequency)
+    {
+        // if the note is played again while it's still fading we reset its fading instead of creating a new one
+        if (activeNotes.Exists(x => x.Frequency == frequency))
+        {
+            Note note = activeNotes.Find(x => x.Frequency == frequency);
+            note.Fading = false;
+            note.FadeElapsed = 0f;
+        }
+        else
+            activeNotes.Add(new(frequency));
+    }
+
+    public void StopPlaying(float frequency)
+    {
+        if (activeNotes.Exists(x => x.Frequency == frequency))
+            activeNotes.Find(x => x.Frequency == frequency).Fading = true;
+    }
 
     private class Note
     {
@@ -15,37 +34,47 @@ public class SquareWaveGenerator : MonoBehaviour
         public float Amplitude { get; set; }
         public float Phase { get; set; }
         public float FadeElapsed { get; set; }
+        public bool Fading { get; set; }
         public Note(float frequency)
         {
             Frequency = frequency;
             Amplitude = 1f;
             FadeElapsed = 0f;
+            Fading = false;
         }
     }
 
-    private List<Note> activeNotes = new();
+    private readonly List<Note> activeNotes = new();
+
+    private void Awake()
+    {
+        Application.targetFrameRate = -1;
+    }
 
     private void Update()
     {
-        if (Input.anyKey)
-        {
-            foreach (KeyCode keyCode in System.Enum.GetValues(typeof(KeyCode)))
-            {
-                if (Input.GetKey(keyCode))
-                {
-                    float frequency = Mathf.Pow(2, octave) * (Frequencies.Keys.ContainsKey(keyCode) ? Frequencies.Keys[keyCode] : Frequencies.tuning);
-                    if (activeNotes.Exists(x => x.Frequency == frequency))
-                        activeNotes.Find(x => x.Frequency == frequency).FadeElapsed = 0f;
-                    else
-                        activeNotes.Add(new(frequency));
-                }
-            }
-        }
+        //if (Input.anyKey)
+        //{
+        //    foreach (KeyCode keyCode in System.Enum.GetValues(typeof(KeyCode)))
+        //    {
+        //        if (Input.GetKey(keyCode))
+        //        {
+        //            if (keyCode == KeyCode.Mouse0)
+        //                continue;
+        //            float frequency = Mathf.Pow(2, octave) * (Frequencies.Keys.ContainsKey(keyCode) ? Frequencies.Keys[keyCode] : Frequencies.tuning);
+        //            if (activeNotes.Exists(x => x.Frequency == frequency))
+        //                activeNotes.Find(x => x.Frequency == frequency).FadeElapsed = 0f;
+        //            else
+        //                activeNotes.Add(new(frequency));
+        //        }
+        //    }
+        //}
 
         // If playing, increment the fade elapsed time
         for (int i = 0; i < activeNotes.Count; i++)
         {
-            activeNotes[i].FadeElapsed += Time.deltaTime;
+            if (activeNotes[i].Fading)
+                activeNotes[i].FadeElapsed += Time.deltaTime;
 
             // Once the fade duration is over, stop playing
             if (activeNotes[i].FadeElapsed >= decay)
