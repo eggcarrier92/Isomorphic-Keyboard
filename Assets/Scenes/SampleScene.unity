@@ -458,7 +458,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   sampleRate: 48000
   decay: 0.3
-  attack: 0.05
+  attack: 0.01
   octave: 0
 --- !u!82 &161197067
 AudioSource:
