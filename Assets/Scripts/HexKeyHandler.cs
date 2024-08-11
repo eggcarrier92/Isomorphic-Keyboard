@@ -20,7 +20,6 @@ public class HexKeyHandler : MonoBehaviour
         {
             if (!_collider.OverlapPoint(Camera.main.ScreenToWorldPoint(touch.position)))
                 continue;
-            Debug.Log("ad");
             if (touch.phase == TouchPhase.Began)
                 generator.StartPlaying(Frequencies.Notes[note] * Mathf.Pow(2, octave - 4));
             else if (touch.phase == TouchPhase.Ended)

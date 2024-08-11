@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 [RequireComponent(typeof(AudioSource))]
@@ -7,6 +8,7 @@ public class WaveGenerator : MonoBehaviour
     //[SerializeField] private float frequency = 440f;          // Frequency of the square wave in Hz
     [SerializeField] private int sampleRate = 48000;          // Sample rate (samples per second)
     [SerializeField] private float decay = .3f;               // Duration of the fade-out in seconds
+    [SerializeField] private float attack = .05f;
     [SerializeField] private int octave = 0;
 
     public void StartPlaying(float frequency)
@@ -16,16 +18,30 @@ public class WaveGenerator : MonoBehaviour
         {
             Note note = activeNotes.Find(x => x.Frequency == frequency);
             note.Fading = false;
-            note.FadeElapsed = 0f;
+            note.FadeSamplesRemaining = Mathf.CeilToInt(sampleRate * attack);
         }
         else
-            activeNotes.Add(new(frequency));
+        {
+            Note note = new(frequency);
+            activeNotes.Add(note);
+            note.FadeSamplesRemaining = Mathf.CeilToInt(sampleRate * attack);
+        }
     }
 
     public void StopPlaying(float frequency)
     {
         if (activeNotes.Exists(x => x.Frequency == frequency))
-            activeNotes.Find(x => x.Frequency == frequency).Fading = true;
+        {
+            Note note = activeNotes.Find(x => x.Frequency == frequency);
+            float fadeStartPos = 1f;
+            if (note.FadeSamplesRemaining > 0)
+            {
+                fadeStartPos = 1f - note.FadeSamplesRemaining / (sampleRate * attack);
+            }
+            Debug.Log(fadeStartPos);
+            note.Fading = true;
+            note.FadeSamplesRemaining = Mathf.CeilToInt(fadeStartPos * sampleRate * decay);
+        }
     }
 
     private class Note
@@ -33,13 +49,12 @@ public class WaveGenerator : MonoBehaviour
         public float Frequency { get; }
         public float Amplitude { get; set; }
         public float Phase { get; set; }
-        public float FadeElapsed { get; set; }
         public bool Fading { get; set; }
+        public int FadeSamplesRemaining { get; set; }
         public Note(float frequency)
         {
             Frequency = frequency;
             Amplitude = 1f;
-            FadeElapsed = 0f;
             Fading = false;
         }
     }
@@ -53,31 +68,11 @@ public class WaveGenerator : MonoBehaviour
 
     private void Update()
     {
-        //if (Input.anyKey)
-        //{
-        //    foreach (KeyCode keyCode in System.Enum.GetValues(typeof(KeyCode)))
-        //    {
-        //        if (Input.GetKey(keyCode))
-        //        {
-        //            if (keyCode == KeyCode.Mouse0)
-        //                continue;
-        //            float frequency = Mathf.Pow(2, octave) * (Frequencies.Keys.ContainsKey(keyCode) ? Frequencies.Keys[keyCode] : Frequencies.tuning);
-        //            if (activeNotes.Exists(x => x.Frequency == frequency))
-        //                activeNotes.Find(x => x.Frequency == frequency).FadeElapsed = 0f;
-        //            else
-        //                activeNotes.Add(new(frequency));
-        //        }
-        //    }
-        //}
 
-        // If playing, increment the fade elapsed time
         for (int i = 0; i < activeNotes.Count; i++)
         {
-            if (activeNotes[i].Fading)
-                activeNotes[i].FadeElapsed += Time.deltaTime;
-
             // Once the fade duration is over, stop playing
-            if (activeNotes[i].FadeElapsed >= decay)
+            if (activeNotes[i].Fading && activeNotes[i].FadeSamplesRemaining <= 0)
             {
                 activeNotes.Remove(activeNotes[i]);
                 i--;
@@ -89,8 +84,16 @@ public class WaveGenerator : MonoBehaviour
 
     private void OnAudioFilterRead(float[] data, int channels)
     {
-        foreach (var note in activeNotes)
-            GenerateWave(data, channels, note);
+        try
+        {
+            foreach (var note in activeNotes)
+                GenerateWave(data, channels, note);
+        }
+        catch (InvalidOperationException)
+        {
+            foreach (var note in activeNotes)
+                GenerateWave(data, channels, note);
+        }
     }
 
     private void GenerateWave(float[] data, int channels, Note note)
@@ -99,16 +102,6 @@ public class WaveGenerator : MonoBehaviour
         float increment = note.Frequency * 2f * Mathf.PI / sampleRate;
         for (int i = 0; i < data.Length; i += channels)
         {
-            //if (!isPlaying)
-            //{
-            //    // Fill buffer with silence if not playing
-            //    for (int channel = 0; channel < channels; channel++)
-            //    {
-            //        data[i + channel] = 0f;
-            //    }
-            //    continue;
-            //}
-
             // Reset the sample value
             float sample = 0f;
 
@@ -119,7 +112,18 @@ public class WaveGenerator : MonoBehaviour
             }
 
             // Scale the sample by the amplitude and the factor for square wave
-            note.Amplitude = 1f - note.FadeElapsed / decay;
+            if (note.Fading)
+            {
+                note.Amplitude = note.FadeSamplesRemaining / (decay * sampleRate);
+                note.FadeSamplesRemaining--;
+            }
+            else if (note.FadeSamplesRemaining > 0)
+            {
+                note.Amplitude = 1f - note.FadeSamplesRemaining / (attack * sampleRate);
+                note.FadeSamplesRemaining--;
+            }
+            else
+                note.Amplitude = 1f;
             sample *= 0.2f * note.Amplitude * (4f / Mathf.PI);
 
             // Apply the sample to all channels
